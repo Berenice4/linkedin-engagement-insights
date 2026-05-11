@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -9,7 +9,9 @@ import {
   Title,
   Tooltip,
   Legend,
-  ArcElement
+  ArcElement,
+  LineController,
+  BarController
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import html2canvas from 'html2canvas'
@@ -24,7 +26,9 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  ArcElement
+  ArcElement,
+  LineController,
+  BarController
 )
 
 const MOCK_DATA = [
@@ -148,58 +152,76 @@ function ChevronIcon({ direction = 'left' }) {
   )
 }
 
+function HelpIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  )
+}
+
 function EngagementGauge({ rate, type }) {
+  const [animatedRate, setAnimatedRate] = useState(0)
   const level = getEngagementLevel(rate, type)
   const maxRate = 10
   const percentage = Math.min((rate / maxRate) * 100, 100)
-  
+
   const colors = {
     poor: '#cc1016',
     average: '#b46900',
     great: '#057642'
   }
-  
-  const getArcPath = (startAngle, endAngle, radius = 80) => {
-    const start = {
-      x: 140 + radius * Math.cos((startAngle - 90) * Math.PI / 180),
-      y: 140 + radius * Math.sin((startAngle - 90) * Math.PI / 180)
-    }
-    const end = {
-      x: 140 + radius * Math.cos((endAngle - 90) * Math.PI / 180),
-      y: 140 + radius * Math.sin((endAngle - 90) * Math.PI / 180)
-    }
-    const largeArc = endAngle - startAngle > 180 ? 1 : 0
-    return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`
-  }
 
-  const pointerAngle = -180 + (percentage * 1.8)
-  const pointerX = 140 + 65 * Math.cos((pointerAngle - 90) * Math.PI / 180)
-  const pointerY = 140 + 65 * Math.sin((pointerAngle - 90) * Math.PI / 180)
+  useEffect(() => {
+    const duration = 1500
+    const startTime = Date.now()
+    const animate = () => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setAnimatedRate(rate * eased)
+      if (progress < 1) requestAnimationFrame(animate)
+    }
+    requestAnimationFrame(animate)
+  }, [rate])
+
+  const animatedPercentage = Math.min((animatedRate / maxRate) * 100, 100)
 
   return (
-    <div className="gauge-container">
-      <svg className="gauge-svg" viewBox="0 0 280 160">
-        <defs>
-          <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#cc1016"/>
-            <stop offset="50%" stopColor="#b46900"/>
-            <stop offset="100%" stopColor="#057642"/>
-          </linearGradient>
-        </defs>
-        <path d={getArcPath(0, 60, 80)} fill="none" stroke="#e0e0e0" strokeWidth="12" strokeLinecap="round"/>
-        <path d={getArcPath(0, 60, 80)} fill="none" stroke="url(#gaugeGradient)" strokeWidth="12" strokeLinecap="round" strokeDasharray={`${percentage * 2.4} ${240 - percentage * 2.4}`}/>
-        <circle cx="140" cy="140" r="8" fill={colors[level]}/>
-        <line x1="140" y1="140" x2={pointerX} y2={pointerY} stroke={colors[level]} strokeWidth="3" strokeLinecap="round"/>
-        <circle cx={pointerX} cy={pointerY} r="5" fill={colors[level]}/>
-      </svg>
-      <div className="engagement-value">
-        <div className={`value ${level}`}>{rate.toFixed(2)}%</div>
-        <div className="label">Engagement Rate</div>
+    <div className="gauge-container enhanced">
+      <div className="bar-gauge">
+        <div className="bar-gauge-labels">
+          <span>0%</span>
+          <span>2.5%</span>
+          <span>5%</span>
+          <span>7.5%</span>
+          <span>10%</span>
+        </div>
+        <div className="bar-track">
+          <div 
+            className={`bar-fill ${level}`}
+            style={{ width: `${animatedPercentage}%` }}
+          />
+          <div 
+            className="bar-marker"
+            style={{ left: `${animatedPercentage}%` }}
+          >
+            <div className="marker-tooltip">{animatedRate.toFixed(2)}%</div>
+          </div>
+        </div>
+        <div className="bar-zones">
+          <div className="zone poor"><span>Poor</span></div>
+          <div className="zone average"><span>Average</span></div>
+          <div className="zone great"><span>Great</span></div>
+        </div>
       </div>
-      <div className="gauge-labels">
-        <span className="gauge-label poor">Poor</span>
-        <span className="gauge-label average">Average</span>
-        <span className="gauge-label great">Great</span>
+      <div className="gauge-result">
+        <div className={`gauge-value ${level}`}>{rate.toFixed(2)}%</div>
+        <div className="gauge-level-badge" data-level={level}>
+          {level === 'poor' ? 'Needs Improvement' : level === 'average' ? 'Good' : 'Excellent'}
+        </div>
       </div>
     </div>
   )
@@ -209,6 +231,7 @@ function App() {
   const [posts, setPosts] = useState(MOCK_DATA)
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [benchmarkType, setBenchmarkType] = useState('personal')
+  const [showHelp, setShowHelp] = useState(false)
   const [formData, setFormData] = useState({
     impressions: '',
     clicks: '',
@@ -270,7 +293,10 @@ function App() {
     
     const canvas = await html2canvas(insightsRef.current, {
       scale: 2,
-      backgroundColor: '#f3f6f8'
+      backgroundColor: '#f3f6f8',
+      useCORS: true,
+      allowTaint: true,
+      logging: false
     })
     
     const imgData = canvas.toDataURL('image/png')
@@ -439,6 +465,74 @@ function App() {
           </div>
         </form>
 
+        <div className="info-section">
+          <h4>Come Funziona</h4>
+          <p className="info-text">
+            L'<strong>Engagement Rate</strong> misura quanto il tuo post coinvolge il pubblico:
+          </p>
+          <div className="formula-box">
+            <code>ER = (Clic + Reazioni + Commenti + Condivisioni) / Impressioni × 100</code>
+          </div>
+          <p className="info-text">
+            Più alto è il valore, più il tuo post sta performando.
+          </p>
+        </div>
+
+        <div className="examples-section">
+          <h4>Esempi Pratici</h4>
+          <p className="examples-desc">Clicca per vedere come funziona</p>
+          
+          <div className="example-card great">
+            <div className="example-header">
+              <span className="example-badge great">Ottimo</span>
+              <span className="example-er">5.54% ER</span>
+            </div>
+            <div className="example-name">Post Virale</div>
+            <div className="example-desc">50.000 impressioni con alto engagement organico</div>
+            <button className="example-btn" onClick={() => setFormData({ impressions: '50000', clicks: '2500', reactions: '1800', comments: '450', shares: '320', type: 'Personal' })}>
+              Prova
+            </button>
+          </div>
+
+          <div className="example-card average">
+            <div className="example-header">
+              <span className="example-badge average">Medio</span>
+              <span className="example-er">5.13% ER</span>
+            </div>
+            <div className="example-name">Post Standard</div>
+            <div className="example-desc">15.000 impressioni, performance nella media</div>
+            <button className="example-btn" onClick={() => setFormData({ impressions: '15000', clicks: '400', reactions: '280', comments: '60', shares: '30', type: 'Company' })}>
+              Prova
+            </button>
+          </div>
+
+          <div className="example-card poor">
+            <div className="example-header">
+              <span className="example-badge poor">Da Migliorare</span>
+              <span className="example-er">1.25% ER</span>
+            </div>
+            <div className="example-name">Post Debole</div>
+            <div className="example-desc">20.000 impressioni ma basso coinvolgimento</div>
+            <button className="example-btn" onClick={() => setFormData({ impressions: '20000', clicks: '150', reactions: '80', comments: '15', shares: '5', type: 'Company' })}>
+              Prova
+            </button>
+          </div>
+        </div>
+
+        <div className="benchmarks-section">
+          <h4>Valori di Riferimento</h4>
+          <div className="benchmark-table">
+            <div className="benchmark-row">
+              <span>Profilo Personale</span>
+              <span><span className="benchmark poor">&lt;1.5%</span> <span className="benchmark avg">1.5-3.5%</span> <span className="benchmark great">&gt;3.5%</span></span>
+            </div>
+            <div className="benchmark-row">
+              <span>Pagina Aziendale</span>
+              <span><span className="benchmark poor">&lt;1%</span> <span className="benchmark avg">1-2.5%</span> <span className="benchmark great">&gt;2.5%</span></span>
+            </div>
+          </div>
+        </div>
+
         <div className="mock-data-section">
           <h4>Quick Load Mock Data</h4>
           <div className="mock-buttons">
@@ -458,11 +552,99 @@ function App() {
       <div className="insights-panel" ref={insightsRef}>
         <div className="insights-header">
           <h1>LinkedIn <span>Engagement Insights</span></h1>
-          <button className="generate-report-btn" onClick={handleGenerateReport}>
-            <DownloadIcon />
-            Generate Report
-          </button>
+          <div className="header-actions">
+            <button className="help-btn" onClick={() => setShowHelp(true)}>
+              <HelpIcon />
+              Help Me
+            </button>
+            <button className="generate-report-btn" onClick={handleGenerateReport}>
+              <DownloadIcon />
+              Generate Report
+            </button>
+          </div>
         </div>
+
+        {showHelp && (
+          <div className="help-modal-overlay" onClick={() => setShowHelp(false)}>
+            <div className="help-modal" onClick={e => e.stopPropagation()}>
+              <button className="help-close" onClick={() => setShowHelp(false)}>×</button>
+              
+              <div className="help-hero">
+                <div className="help-hero-icon">?</div>
+                <h2>Help Me Understand</h2>
+                <p>Your complete guide to LinkedIn metrics</p>
+              </div>
+
+              <div className="help-grid">
+                <div className="help-card">
+                  <div className="help-card-icon">👁</div>
+                  <h3>Impressions</h3>
+                  <p>How many times your post was displayed. Higher = better reach.</p>
+                </div>
+                <div className="help-card">
+                  <div className="help-card-icon">👆</div>
+                  <h3>Clicks</h3>
+                  <p>Users who clicked to learn more. Shows interest level.</p>
+                </div>
+                <div className="help-card">
+                  <div className="help-card-icon">❤️</div>
+                  <h3>Reactions</h3>
+                  <p>Likes, loves, celebrates. Indicates content approval.</p>
+                </div>
+                <div className="help-card">
+                  <div className="help-card-icon">💬</div>
+                  <h3>Comments</h3>
+                  <p>Active engagement. Shows real conversation.</p>
+                </div>
+                <div className="help-card">
+                  <div className="help-card-icon">🔄</div>
+                  <h3>Shares</h3>
+                  <p>Content virality. Higher = more reach.</p>
+                </div>
+              </div>
+
+              <div className="help-section highlighted">
+                <h3>📐 The Magic Formula</h3>
+                <div className="help-formula">
+                  <code>Engagement Rate = (Clicks + Reactions + Comments + Shares) ÷ Impressions × 100</code>
+                </div>
+                <p>Measures how much your audience interacts with your content relative to views.</p>
+              </div>
+
+              <div className="help-benchmarks">
+                <h3>🎯 Performance Benchmarks</h3>
+                <div className="benchmark-cards">
+                  <div className="benchmark-card personal">
+                    <span className="benchmark-type">Personal Profile</span>
+                    <span className="benchmark-value">3.5% avg</span>
+                  </div>
+                  <div className="benchmark-card company">
+                    <span className="benchmark-type">Company Page</span>
+                    <span className="benchmark-value">2.5% avg</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="help-rating-scale">
+                <h3>📊 Rating Scale</h3>
+                <div className="rating-bar">
+                  <div className="rating-section poor">
+                    <span>&lt;1.5%</span>
+                    <strong>Poor</strong>
+                  </div>
+                  <div className="rating-section average">
+                    <span>1.5-3.5%</span>
+                    <strong>Average</strong>
+                  </div>
+                  <div className="rating-section great">
+                    <span>&gt;3.5%</span>
+                    <strong>Great</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="kpi-cards">
           <div className="kpi-card">
@@ -498,7 +680,7 @@ function App() {
         <div className="main-visualization">
           <div className="gauge-card">
             <h3><LikeIcon /> Engagement Rate Gauge</h3>
-            <EngagementGauge rate={latestER} type={latestPost.type || 'personal'} />
+            <EngagementGauge rate={avgEngagement} type={latestPost.type || 'personal'} />
           </div>
           
           <div className="charts-card">
@@ -570,6 +752,10 @@ function App() {
             </table>
           )}
         </div>
+
+        <footer className="app-footer">
+          <p>&copy;2026 STREET REPORTER S.R.L</p>
+        </footer>
       </div>
     </div>
   )
